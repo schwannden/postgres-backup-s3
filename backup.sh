@@ -1,0 +1,38 @@
+#!/bin/sh
+
+set -e
+
+# Environment variables
+POSTGRES_HOST=${POSTGRES_HOST:-"localhost"}
+POSTGRES_PORT=${POSTGRES_PORT:-5432}
+POSTGRES_DB=${POSTGRES_DB}
+POSTGRES_USER=${POSTGRES_USER}
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+MINIO_ENDPOINT=${MINIO_ENDPOINT}
+MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+MINIO_BUCKET=${MINIO_BUCKET}
+BACKUP_PATH=${BACKUP_PATH:-"/backup"}
+
+# Date format for the backup file
+DATE=$(date +"%Y%m%d%H%M")
+
+# Backup file name
+mkdir -p ${BACKUP_PATH}
+BACKUP_FILE="${BACKUP_PATH}/${POSTGRES_DB}_${DATE}.sql"
+
+# Create backup
+echo "dumping backup file to ${BACKUP_FILE}"
+PGPASSWORD=$POSTGRES_PASSWORD pg_dump -h $POSTGRES_HOST -p $POSTGRES_PORT -U $POSTGRES_USER -d $POSTGRES_DB > $BACKUP_FILE
+
+# Configure Minio client
+echo "$MINIO_ENDPOINT $MINIO_ACCESS_KEY $MINIO_SECRET_KEY"
+mc alias set minio $MINIO_ENDPOINT $MINIO_ACCESS_KEY $MINIO_SECRET_KEY
+
+# Upload to Minio
+echo "uploading ${BACKUP_FILE} to ${MINIO_ENDPOINT}"
+mc cp $BACKUP_FILE minio/$MINIO_BUCKET/$BACKUP_FILE
+
+# Clean up local backup
+echo "backup complete"
+rm $BACKUP_FILE
